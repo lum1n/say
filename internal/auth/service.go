@@ -83,13 +83,13 @@ func NewService(pool *pgxpool.Pool, cfg Config, sender CodeSender) (*Service, er
 	if cfg.LoginLifetime == 0 {
 		cfg.LoginLifetime = 10 * time.Minute
 	}
-	if sender == nil && !cfg.DebugReturnCode {
-		return nil, ErrDeliveryUnavailable
-	}
 	return &Service{pool: pool, cfg: cfg, sender: sender}, nil
 }
 
 func (s *Service) Start(ctx context.Context, rawEmail string) (LoginStart, error) {
+	if s.sender == nil && !s.cfg.DebugReturnCode {
+		return LoginStart{}, ErrDeliveryUnavailable
+	}
 	email, err := normalizeEmail(rawEmail)
 	if err != nil {
 		return LoginStart{}, err

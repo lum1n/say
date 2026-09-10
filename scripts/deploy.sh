@@ -79,10 +79,21 @@ COMPOSE_PROFILES=$profiles docker compose \
   -f "$compose_file" \
   config --quiet
 
-COMPOSE_PROFILES=$profiles docker compose \
+if ! COMPOSE_PROFILES=$profiles docker compose \
   --env-file "$env_file" \
   -f "$compose_file" \
-  up -d --build --remove-orphans --wait --wait-timeout 180
+  up -d --build --remove-orphans --wait --wait-timeout 180; then
+  echo "Deployment failed; current service state and startup logs follow." >&2
+  COMPOSE_PROFILES=$profiles docker compose \
+    --env-file "$env_file" \
+    -f "$compose_file" \
+    ps -a >&2 || true
+  COMPOSE_PROFILES=$profiles docker compose \
+    --env-file "$env_file" \
+    -f "$compose_file" \
+    logs --tail=100 api postgres >&2 || true
+  exit 1
+fi
 
 echo
 COMPOSE_PROFILES=$profiles docker compose \
