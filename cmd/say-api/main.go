@@ -49,10 +49,16 @@ func main() {
 			logger.Error("SAY_AUTH_WEBHOOK_URL must use HTTPS in production")
 			os.Exit(1)
 		}
-		codeSender = auth.WebhookSender{
-			URL:   webhookURL,
-			Token: os.Getenv("SAY_AUTH_WEBHOOK_TOKEN"),
+		sender, err := auth.NewEmailServiceSender(
+			webhookURL,
+			mustEnv(logger, "SAY_AUTH_EMAIL_FROM"),
+			os.Getenv("SAY_AUTH_WEBHOOK_TOKEN"),
+		)
+		if err != nil {
+			logger.Error("email delivery configuration failed", "error", err)
+			os.Exit(1)
 		}
+		codeSender = sender
 	}
 	authService, err := auth.NewService(database.Pool, auth.Config{
 		Issuer:          envOr("SAY_JWT_ISSUER", "say"),

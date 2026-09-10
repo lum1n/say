@@ -28,20 +28,18 @@ the same endpoint.
 ## Required production login delivery
 
 The generated deployment is secure-by-default and never returns login codes in
-HTTP responses. Set these values in `.env.production`, then rerun `make deploy`:
+HTTP responses. Point say at email-service, then rerun `make deploy`:
 
 ```dotenv
-SAY_AUTH_WEBHOOK_URL=https://your-mailer.example/login-code
+SAY_AUTH_WEBHOOK_URL=https://email.example/emails/send
 SAY_AUTH_WEBHOOK_TOKEN=...
+SAY_AUTH_EMAIL_FROM=Say <noreply@example.com>
 ```
 
-The webhook receives:
+`SAY_AUTH_WEBHOOK_TOKEN` is sent as `X-Internal-Api-Token`. say posts the
+email-service `/emails/send` body with subject/text/html containing the code.
 
-```json
-{"email":"person@example.com","code":"123456"}
-```
-
-Without the webhook the stack is healthy, but users cannot receive login codes.
+Without these values the stack is healthy, but users cannot receive login codes.
 
 ## Add provider workers
 
