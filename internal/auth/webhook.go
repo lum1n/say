@@ -59,9 +59,9 @@ func (s EmailServiceSender) SendLoginCode(ctx context.Context, email, code strin
 		return fmt.Errorf("create delivery request: %w", err)
 	}
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-Internal-Actor", "say")
+	request.Header.Set("X-Service-Name", "say")
 	if s.Token != "" {
-		request.Header.Set("X-Internal-Api-Token", s.Token)
+		request.Header.Set("X-Service-Key", s.Token)
 	}
 	client := s.Client
 	if client == nil {
@@ -72,9 +72,13 @@ func (s EmailServiceSender) SendLoginCode(ctx context.Context, email, code strin
 		return fmt.Errorf("deliver login code: %w", err)
 	}
 	defer response.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 64<<10))
+	responseBody, _ := io.ReadAll(io.LimitReader(response.Body, 4<<10))
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return fmt.Errorf("delivery endpoint returned HTTP %d", response.StatusCode)
+		detail := strings.TrimSpace(string(responseBody))
+		if detail == "" {
+			return fmt.Errorf("delivery endpoint returned HTTP %d", response.StatusCode)
+		}
+		return fmt.Errorf("delivery endpoint returned HTTP %d: %s", response.StatusCode, detail)
 	}
 	return nil
 }

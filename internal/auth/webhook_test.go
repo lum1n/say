@@ -19,11 +19,11 @@ func TestEmailServiceSenderPostsLoginCode(t *testing.T) {
 		if r.Header.Get("Content-Type") != "application/json" {
 			t.Fatalf("content-type = %q", r.Header.Get("Content-Type"))
 		}
-		if r.Header.Get("X-Internal-Api-Token") != "secret" {
-			t.Fatalf("token = %q", r.Header.Get("X-Internal-Api-Token"))
+		if r.Header.Get("X-Service-Key") != "secret" {
+			t.Fatalf("token = %q", r.Header.Get("X-Service-Key"))
 		}
-		if r.Header.Get("X-Internal-Actor") != "say" {
-			t.Fatalf("actor = %q", r.Header.Get("X-Internal-Actor"))
+		if r.Header.Get("X-Service-Name") != "say" {
+			t.Fatalf("service = %q", r.Header.Get("X-Service-Name"))
 		}
 		body, err := io.ReadAll(r.Body)
 		if err != nil {

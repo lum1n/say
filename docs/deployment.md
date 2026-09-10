@@ -33,10 +33,11 @@ HTTP responses. Point say at email-service, then rerun `make deploy`:
 ```dotenv
 SAY_AUTH_WEBHOOK_URL=https://email.example/emails/send
 SAY_AUTH_WEBHOOK_TOKEN=...
-SAY_AUTH_EMAIL_FROM=Say <noreply@example.com>
+SAY_AUTH_EMAIL_FROM="Say <noreply@example.com>"
 ```
 
-`SAY_AUTH_WEBHOOK_TOKEN` is sent as `X-Internal-Api-Token`. say posts the
+`SAY_AUTH_WEBHOOK_TOKEN` is sent as `X-Service-Key` (with `X-Service-Name: say`).
+Quote `SAY_AUTH_EMAIL_FROM` when it contains spaces or angle brackets. say posts the
 email-service `/emails/send` body with subject/text/html containing the code.
 
 Without these values the stack is healthy, but users cannot receive login codes.
