@@ -1,0 +1,25 @@
+FROM golang:1.26-alpine AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+ARG VERSION=dev
+RUN CGO_ENABLED=0 go build \
+    -trimpath \
+    -ldflags="-s -w -X main.version=${VERSION}" \
+    -o /out/say-api \
+    ./cmd/say-api
+
+FROM alpine:3.22
+RUN apk add --no-cache ca-certificates tzdata \
+    && addgroup -S -g 10001 say \
+    && adduser -S -D -H -u 10001 -G say say
+
+LABEL org.opencontainers.image.title="say API"
+LABEL org.opencontainers.image.description="Control plane for say messaging"
+
+COPY --from=builder /out/say-api /usr/local/bin/say-api
+
+USER say
+EXPOSE 8080
+ENTRYPOINT ["/usr/local/bin/say-api"]

@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://say.example/schemas/worker-envelope.schema.json",
+  "title": "say worker envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "type"],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "type": {
+      "enum": [
+        "hello",
+        "ready",
+        "heartbeat",
+        "send",
+        "conversations",
+        "messages",
+        "link.start",
+        "link.finish",
+        "message.new",
+        "account.status",
+        "event.ack",
+        "error"
+      ]
+    },
+    "generation": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "status": {
+      "enum": ["ok", "error"]
+    },
+    "error": {
+      "$ref": "#/$defs/error"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "type": { "const": "hello" } },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["payload"],
+        "properties": { "payload": { "$ref": "#/$defs/hello" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "type": { "const": "ready" } },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["generation", "payload"],
+        "properties": { "payload": { "$ref": "#/$defs/ready" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "type": { "const": "message.new" } },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["id", "generation", "payload"],
+        "properties": { "payload": { "$ref": "#/$defs/messageNew" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "type": { "const": "account.status" } },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["id", "generation", "payload"],
+        "properties": { "payload": { "$ref": "#/$defs/accountStatus" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "type": { "const": "event.ack" } },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["id", "generation", "status"],
+        "properties": { "status": { "const": "ok" } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "status": { "const": "error" } },
+        "required": ["status"]
+      },
+      "then": {
+        "required": ["id", "error"]
+      }
+    }
+  ],
+  "$defs": {
+    "hello": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["token", "platform", "worker_version"],
+      "properties": {
+        "token": { "type": "string", "minLength": 32 },
+        "platform": { "enum": ["signal", "telegram"] },
+        "worker_version": { "type": "string", "minLength": 1 },
+        "capabilities": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "ready": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["account_id", "worker_id", "generation"],
+      "properties": {
+        "account_id": { "type": "string" },
+        "worker_id": { "type": "string" },
+        "credential": { "type": "string" },
+        "generation": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "messageNew": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_message_id",
+        "conversation_id",
+        "author_id",
+        "author_name",
+        "body",
+        "sent_at",
+        "direction"
+      ],
+      "properties": {
+        "provider_event_id": { "type": "string" },
+        "provider_message_id": { "type": "string" },
+        "conversation_id": { "type": "string" },
+        "author_id": { "type": "string" },
+        "author_name": { "type": "string" },
+        "body": { "type": "string" },
+        "sent_at": { "type": "string", "format": "date-time" },
+        "direction": { "enum": ["incoming", "outgoing"] }
+      }
+    },
+    "accountStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": {
+          "enum": ["live", "offline", "unlinked", "linking", "upgrade_required"]
+        },
+        "external_id": { "type": "string" },
+        "detail": { "type": "string" }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}

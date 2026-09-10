@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://say.example/schemas/client-envelope.schema.json",
+  "title": "say client real-time envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "type"],
+  "properties": {
+    "version": { "const": 1 },
+    "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "type": {
+      "enum": [
+        "subscribe",
+        "unsubscribe",
+        "subscribed",
+        "unsubscribed",
+        "message.new",
+        "message.updated",
+        "conversation.updated",
+        "account.status",
+        "error"
+      ]
+    },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "status": { "enum": ["ok", "error"] },
+    "payload": { "type": "object" },
+    "error": { "$ref": "#/$defs/error" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "type": { "enum": ["subscribe", "unsubscribe"] }
+        },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["id", "payload"],
+        "properties": {
+          "payload": { "$ref": "#/$defs/subscription" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "type": { "const": "error" } },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["error"]
+      }
+    }
+  ],
+  "$defs": {
+    "subscription": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "account_ids": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}

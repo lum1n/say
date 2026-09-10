@@ -1,0 +1,20 @@
+{
+  "name": "@say/client-types",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "generate": "openapi-typescript ../../api/openapi.yaml -o src/schema.d.ts",
+    "check": "tsc --noEmit",
+    "validate:schemas": "node scripts/validate-schemas.mjs"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "openapi-typescript": "7.10.1",
+    "typescript": "5.9.3"
+  }
+}

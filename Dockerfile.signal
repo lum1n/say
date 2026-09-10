@@ -1,0 +1,29 @@
+FROM golang:1.26-alpine AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+ARG VERSION=dev
+RUN CGO_ENABLED=0 go build \
+    -trimpath \
+    -ldflags="-s -w -X main.version=${VERSION}" \
+    -o /out/say-signal \
+    ./cmd/say-signal
+
+ARG SIGNAL_CLI_IMAGE=ghcr.io/asamk/signal-cli:0.14.7-native
+FROM ${SIGNAL_CLI_IMAGE}
+
+LABEL org.opencontainers.image.title="say Signal worker"
+LABEL org.opencontainers.image.description="Single-account Signal worker for say"
+
+COPY --from=builder /out/say-signal /usr/local/bin/say-signal
+
+ENV SIGNAL_CLI_PATH=/usr/bin/signal-cli
+ENV SIGNAL_DATA_DIR=/var/lib/signal-cli/data
+ENV SIGNAL_SOCKET_PATH=/var/lib/signal-cli/run/signal-cli.sock
+ENV SIGNAL_LINK_NAME=say
+ENV SAY_WORKER_CREDENTIAL_FILE=/var/lib/signal-cli/worker-credential
+
+VOLUME ["/var/lib/signal-cli"]
+
+ENTRYPOINT ["/usr/local/bin/say-signal"]

@@ -1,0 +1,68 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      SAY_TEST_DATABASE_URL: postgres://say:say@localhost:5432/say?sslmode=disable
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: say
+          POSTGRES_USER: say
+          POSTGRES_PASSWORD: say
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U say -d say"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            clients/typescript/package-lock.json
+            workers/telegram/package-lock.json
+
+      - run: npm ci
+        working-directory: clients/typescript
+      - run: npm ci
+        working-directory: workers/telegram
+
+      - run: ./scripts/generate.sh
+
+      - name: Generated contracts are current
+        run: git diff --exit-code
+
+      - run: go test -race ./...
+      - run: go vet ./...
+      - run: npm run check
+        working-directory: clients/typescript
+      - run: npm run validate:schemas
+        working-directory: clients/typescript
+      - run: npm audit --audit-level=high
+        working-directory: clients/typescript
+      - run: npm run check
+        working-directory: workers/telegram
+      - run: npm test
+        working-directory: workers/telegram
+      - run: npm audit --audit-level=high
+        working-directory: workers/telegram

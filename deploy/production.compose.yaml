@@ -1,0 +1,113 @@
+name: say
+
+x-service-defaults: &service-defaults
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  postgres:
+    <<: *service-defaults
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: say
+      POSTGRES_USER: say
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U say -d say"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - backend
+
+  api:
+    <<: *service-defaults
+    build:
+      context: ..
+      dockerfile: Dockerfile.api
+      args:
+        VERSION: ${SAY_VERSION:-dev}
+    environment:
+      SAY_ENV: production
+      SAY_ADDR: :8080
+      SAY_DATABASE_URL: postgres://say:${POSTGRES_PASSWORD}@postgres:5432/say?sslmode=disable
+      SAY_JWT_SIGNING_KEY: ${SAY_JWT_SIGNING_KEY:?SAY_JWT_SIGNING_KEY is required}
+      SAY_LOGIN_HASH_KEY: ${SAY_LOGIN_HASH_KEY:?SAY_LOGIN_HASH_KEY is required}
+      SAY_JWT_ISSUER: ${SAY_JWT_ISSUER:-say}
+      SAY_AUTH_WEBHOOK_URL: ${SAY_AUTH_WEBHOOK_URL:-}
+      SAY_AUTH_WEBHOOK_TOKEN: ${SAY_AUTH_WEBHOOK_TOKEN:-}
+      SAY_MESSAGE_RETENTION_DAYS: ${SAY_MESSAGE_RETENTION_DAYS:-30}
+      SAY_MESSAGE_KEEP_PER_CONVERSATION: ${SAY_MESSAGE_KEEP_PER_CONVERSATION:-500}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - 127.0.0.1:${SAY_PUBLIC_PORT:-8000}:8080
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    networks:
+      - backend
+
+  signal:
+    <<: *service-defaults
+    profiles: [signal]
+    build:
+      context: ..
+      dockerfile: Dockerfile.signal
+      args:
+        VERSION: ${SAY_VERSION:-dev}
+    environment:
+      SAY_WORKER_URL: ${SAY_WORKER_BASE_URL:-}/v1/workers/connect
+      SAY_ENROLLMENT_TOKEN: ${SAY_SIGNAL_ENROLLMENT_TOKEN:-}
+      SIGNAL_LINK_NAME: ${SIGNAL_LINK_NAME:-say}
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - signal-data:/var/lib/signal-cli
+    networks:
+      - backend
+
+  telegram:
+    <<: *service-defaults
+    profiles: [telegram]
+    build:
+      context: ..
+      dockerfile: Dockerfile.telegram
+    environment:
+      SAY_WORKER_URL: ${SAY_WORKER_BASE_URL:-}/v1/workers/connect
+      SAY_ENROLLMENT_TOKEN: ${SAY_TELEGRAM_ENROLLMENT_TOKEN:-}
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:-}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:-}
+      TELEGRAM_DB_ENCRYPTION_KEY: ${TELEGRAM_DB_ENCRYPTION_KEY:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    volumes:
+      - telegram-data:/data
+    networks:
+      - backend
+
+volumes:
+  postgres-data:
+  signal-data:
+  telegram-data:
+
+networks:
+  backend:

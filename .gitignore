@@ -1,0 +1,9 @@
+/bin/
+/.env
+/.env.production
+/.fake-worker-credential
+/clients/typescript/node_modules/
+/workers/telegram/node_modules/
+/workers/telegram/dist/
+*.tmp
+*.log

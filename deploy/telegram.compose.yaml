@@ -1,0 +1,17 @@
+services:
+  telegram:
+    build:
+      context: ..
+      dockerfile: Dockerfile.telegram
+    restart: unless-stopped
+    environment:
+      SAY_WORKER_URL: ${SAY_WORKER_URL:?set SAY_WORKER_URL}
+      SAY_ENROLLMENT_TOKEN: ${SAY_ENROLLMENT_TOKEN:-}
+      TELEGRAM_API_ID: ${TELEGRAM_API_ID:?set TELEGRAM_API_ID}
+      TELEGRAM_API_HASH: ${TELEGRAM_API_HASH:?set TELEGRAM_API_HASH}
+      TELEGRAM_DB_ENCRYPTION_KEY: ${TELEGRAM_DB_ENCRYPTION_KEY:-}
+    volumes:
+      - telegram-data:/data
+
+volumes:
+  telegram-data:

@@ -1,0 +1,695 @@
+openapi: 3.0.3
+info:
+  title: say API
+  version: 0.1.0
+  description: |
+    Public control-plane API for Signal, Telegram, and AI conversations.
+    Worker and client WebSocket envelopes are specified under ../protocol.
+servers:
+  - url: /v1
+security:
+  - bearerAuth: []
+paths:
+  /healthz:
+    get:
+      operationId: health
+      security: []
+      servers:
+        - url: /
+      responses:
+        "200":
+          description: Service is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+  /auth/start:
+    post:
+      operationId: startAuth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthStartRequest"
+      responses:
+        "202":
+          description: Login code accepted for delivery.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthStartResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+  /auth/verify:
+    post:
+      operationId: verifyAuth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthVerifyRequest"
+      responses:
+        "200":
+          description: Login verified.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /auth/refresh:
+    post:
+      operationId: refreshAuth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthRefreshRequest"
+      responses:
+        "200":
+          description: Rotated token pair.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /accounts:
+    get:
+      operationId: listAccounts
+      responses:
+        "200":
+          description: Accounts owned by the current user.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accounts]
+                properties:
+                  accounts:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Account"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccountRequest"
+      responses:
+        "201":
+          description: Account and one-time worker enrollment token.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateAccountResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /accounts/{accountId}:
+    parameters:
+      - $ref: "#/components/parameters/AccountId"
+    get:
+      operationId: getAccount
+      responses:
+        "200":
+          description: Account.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Account"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: deleteAccount
+      responses:
+        "204":
+          description: Account, cached content, and worker access scheduled for deletion.
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /accounts/{accountId}/link:
+    parameters:
+      - $ref: "#/components/parameters/AccountId"
+    post:
+      operationId: linkAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkAccountRequest"
+      responses:
+        "200":
+          description: Current link state and next user action.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LinkAccountResponse"
+        "409":
+          description: Worker is offline or link state is invalid.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /conversations:
+    get:
+      operationId: listConversations
+      parameters:
+        - in: query
+          name: account_id
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/Cursor"
+        - in: query
+          name: refresh
+          schema:
+            type: boolean
+          description: Ask a live worker to refresh the conversation cache.
+      responses:
+        "200":
+          description: Cached conversations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [conversations]
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Conversation"
+                  next_cursor:
+                    type: string
+  /conversations/{conversationId}/messages:
+    parameters:
+      - $ref: "#/components/parameters/ConversationId"
+    get:
+      operationId: listMessages
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - in: query
+          name: refresh
+          schema:
+            type: boolean
+          description: Refresh Telegram history before returning the cache.
+      responses:
+        "200":
+          description: Cached messages.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Message"
+                  next_cursor:
+                    type: string
+    post:
+      operationId: sendMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        "202":
+          description: Send command accepted.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SendMessageResponse"
+        "409":
+          description: Worker is offline.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /push/tokens:
+    post:
+      operationId: registerPushToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PushTokenRequest"
+      responses:
+        "204":
+          description: Push token registered.
+  /ai/threads:
+    get:
+      operationId: listAIThreads
+      responses:
+        "200":
+          description: AI threads.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [threads]
+                properties:
+                  threads:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/AIThread"
+    post:
+      operationId: createAIThread
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  maxLength: 200
+      responses:
+        "201":
+          description: AI thread.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AIThread"
+  /ai/threads/{threadId}/messages:
+    post:
+      operationId: sendAIMessage
+      parameters:
+        - in: path
+          name: threadId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AIMessageRequest"
+      responses:
+        "200":
+          description: Server-sent token and completion events.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+  /conversations/{conversationId}/ai/summarize:
+    post:
+      operationId: summarizeConversation
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      responses:
+        "200":
+          description: Server-sent token and completion events.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+  /conversations/{conversationId}/ai/draft:
+    post:
+      operationId: draftConversationReply
+      parameters:
+        - $ref: "#/components/parameters/ConversationId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                instruction:
+                  type: string
+                  maxLength: 2000
+      responses:
+        "200":
+          description: Server-sent token and completion events.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+  /search:
+    get:
+      operationId: searchMessages
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 500
+        - $ref: "#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: Search results from the bounded cache.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [messages]
+                properties:
+                  messages:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Message"
+                  next_cursor:
+                    type: string
+  /ws:
+    get:
+      operationId: connectRealtime
+      description: |
+        Upgrade to the client WebSocket protocol defined by
+        protocol/client-envelope.schema.json. Native clients authenticate with
+        the normal Authorization header.
+      responses:
+        "101":
+          description: WebSocket upgrade accepted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    AccountId:
+      in: path
+      name: accountId
+      required: true
+      schema:
+        type: string
+    ConversationId:
+      in: path
+      name: conversationId
+      required: true
+      schema:
+        type: string
+    Cursor:
+      in: query
+      name: cursor
+      schema:
+        type: string
+  responses:
+    BadRequest:
+      description: Invalid request.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Authentication failed.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    RateLimited:
+      description: Rate limit exceeded.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          $ref: "#/components/schemas/Error"
+    AuthStartRequest:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+    AuthStartResponse:
+      type: object
+      required: [login_id, expires_at]
+      properties:
+        login_id:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        debug_code:
+          type: string
+          description: Development-only login code; never returned in production.
+    AuthVerifyRequest:
+      type: object
+      additionalProperties: false
+      required: [login_id, code]
+      properties:
+        login_id:
+          type: string
+        code:
+          type: string
+          minLength: 6
+          maxLength: 12
+    AuthRefreshRequest:
+      type: object
+      additionalProperties: false
+      required: [refresh_token]
+      properties:
+        refresh_token:
+          type: string
+    TokenPair:
+      type: object
+      required: [access_token, refresh_token, expires_at]
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+    Platform:
+      type: string
+      enum: [signal, telegram]
+    AccountStatus:
+      type: string
+      enum: [unlinked, linking, live, offline, upgrade_required]
+    Account:
+      type: object
+      required:
+        [id, platform, display_name, status, hosting_mode, generation, created_at]
+      properties:
+        id:
+          type: string
+        platform:
+          $ref: "#/components/schemas/Platform"
+        external_id:
+          type: string
+        display_name:
+          type: string
+        status:
+          $ref: "#/components/schemas/AccountStatus"
+        hosting_mode:
+          type: string
+          enum: [desktop, self_hosted, hosted]
+        generation:
+          type: integer
+          format: int64
+          minimum: 0
+        last_seen_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+    CreateAccountRequest:
+      type: object
+      additionalProperties: false
+      required: [platform]
+      properties:
+        platform:
+          $ref: "#/components/schemas/Platform"
+        display_name:
+          type: string
+          maxLength: 200
+        hosting_mode:
+          type: string
+          enum: [desktop, self_hosted, hosted]
+          default: self_hosted
+    CreateAccountResponse:
+      type: object
+      required: [account, enrollment]
+      properties:
+        account:
+          $ref: "#/components/schemas/Account"
+        enrollment:
+          type: object
+          required: [token, expires_at]
+          properties:
+            token:
+              type: string
+              description: Single-use worker enrollment token; returned once.
+            expires_at:
+              type: string
+              format: date-time
+    LinkAccountRequest:
+      type: object
+      additionalProperties: false
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [start, finish, submit_code, submit_password]
+        device_name:
+          type: string
+          maxLength: 100
+        phone_number:
+          type: string
+          description: E.164 number used to start Telegram authorization.
+        code:
+          type: string
+        password:
+          type: string
+          format: password
+    LinkAccountResponse:
+      type: object
+      required: [state]
+      properties:
+        state:
+          type: string
+          enum: [qr_required, code_required, password_required, linked]
+        qr_uri:
+          type: string
+        detail:
+          type: string
+    Conversation:
+      type: object
+      required: [id, account_id, provider_id, title, kind, unread_count]
+      properties:
+        id:
+          type: string
+        account_id:
+          type: string
+        provider_id:
+          type: string
+        title:
+          type: string
+        kind:
+          type: string
+          enum: [direct, group]
+        unread_count:
+          type: integer
+          minimum: 0
+        last_message_at:
+          type: string
+          format: date-time
+    Message:
+      type: object
+      required: [id, conversation_id, author_name, body, sent_at, direction]
+      properties:
+        id:
+          type: string
+        conversation_id:
+          type: string
+        provider_id:
+          type: string
+        author_name:
+          type: string
+        body:
+          type: string
+        sent_at:
+          type: string
+          format: date-time
+        direction:
+          type: string
+          enum: [incoming, outgoing]
+        status:
+          type: string
+          enum: [pending, sent, failed, unknown]
+    SendMessageRequest:
+      type: object
+      additionalProperties: false
+      required: [body, idempotency_key]
+      properties:
+        body:
+          type: string
+          minLength: 1
+          maxLength: 65536
+        idempotency_key:
+          type: string
+          minLength: 16
+          maxLength: 128
+    SendMessageResponse:
+      type: object
+      required: [command_id, message]
+      properties:
+        command_id:
+          type: string
+        message:
+          $ref: "#/components/schemas/Message"
+    PushTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [platform, token]
+      properties:
+        platform:
+          type: string
+          enum: [apns, fcm, expo]
+        token:
+          type: string
+    AIThread:
+      type: object
+      required: [id, title, created_at]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+    AIMessageRequest:
+      type: object
+      additionalProperties: false
+      required: [content]
+      properties:
+        content:
+          type: string
+          minLength: 1
+          maxLength: 65536

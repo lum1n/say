@@ -1,0 +1,15 @@
+services:
+  signal:
+    build:
+      context: ..
+      dockerfile: Dockerfile.signal
+    restart: unless-stopped
+    environment:
+      SAY_WORKER_URL: ${SAY_WORKER_URL:?set SAY_WORKER_URL}
+      SAY_ENROLLMENT_TOKEN: ${SAY_ENROLLMENT_TOKEN:-}
+      SIGNAL_LINK_NAME: ${SIGNAL_LINK_NAME:-say}
+    volumes:
+      - signal-data:/var/lib/signal-cli
+
+volumes:
+  signal-data:

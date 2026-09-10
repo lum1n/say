@@ -1,0 +1,51 @@
+FROM debian:bookworm-slim AS tdlib-builder
+ARG TDLIB_COMMIT=d1085f9cebc5a62379991ae1652673954f229c1f
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates cmake g++ git gperf make pkg-config zlib1g-dev libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src/td
+RUN git init \
+    && git remote add origin https://github.com/tdlib/td.git \
+    && git fetch --depth 1 origin "${TDLIB_COMMIT}" \
+    && git checkout --detach FETCH_HEAD
+RUN cmake -S . -B build \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=/opt/tdlib \
+      -DTD_ENABLE_JNI=OFF \
+    && cmake --build build --target install -j"$(nproc)"
+COPY workers/telegram/tdjson-wrapper.cpp /src/tdjson-wrapper.cpp
+RUN mkdir -p /opt/tdlib/bin \
+    && g++ -std=c++17 \
+      -I/opt/tdlib/include \
+      -L/opt/tdlib/lib \
+      /src/tdjson-wrapper.cpp \
+      -ltdjson \
+      -o /opt/tdlib/bin/tdjson
+
+FROM node:24-bookworm-slim AS app-builder
+WORKDIR /app
+COPY workers/telegram/package.json workers/telegram/package-lock.json ./
+RUN npm ci --no-fund --no-audit
+COPY workers/telegram/tsconfig.json ./
+COPY workers/telegram/src ./src
+RUN npm run build
+
+FROM node:24-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates libssl3 libstdc++6 tini zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY --from=tdlib-builder /opt/tdlib /opt/tdlib
+COPY workers/telegram/package.json workers/telegram/package-lock.json ./
+RUN npm ci --omit=dev --no-fund --no-audit
+COPY --from=app-builder /app/dist ./dist
+
+ENV TELEGRAM_TDLIB_DIR=/data/telegram
+ENV TELEGRAM_TDJSON_PATH=/opt/tdlib/bin/tdjson
+ENV SAY_WORKER_CREDENTIAL_FILE=/data/worker-credential
+ENV SAY_EVENT_SPOOL_DIR=/data/events
+ENV LD_LIBRARY_PATH=/opt/tdlib/lib
+ENV PATH=/opt/tdlib/bin:$PATH
+
+VOLUME ["/data"]
+ENTRYPOINT ["/usr/bin/tini", "--", "node", "/app/dist/index.js"]
